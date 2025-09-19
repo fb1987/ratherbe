@@ -1,8 +1,9 @@
-import os, json, time, random
+import os, json, time
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import numpy as np
 
 from .schemas import CreateSessionReq, SessionResp, NextResp, VoteReq, MoreReq, QuestionDTO
@@ -16,7 +17,7 @@ TOPUP_BATCH_SIZE = int(os.environ.get("TOPUP_BATCH_SIZE", "40"))
 DECK_TARGET = int(os.environ.get("DECK_TARGET", "18"))
 DECK_MIN = int(os.environ.get("DECK_MIN", "8"))
 
-app = FastAPI(title="RatherBe API", version="0.1.0")
+app = FastAPI(title="RatherBe API", version="0.1.1")
 
 origins = os.environ.get("ALLOW_ORIGINS", "*")
 app.add_middleware(
@@ -27,14 +28,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- Helpers ----
+# ---- Static frontend (served from / and /static) ----
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # repo root
+FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+# ---- Helpers (same as before) ----
 
 def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
     for q in raw:
         x = normalize_item(q.get("x","").strip())
         y = normalize_item(q.get("y","").strip())
-        if not x or not y or x == y:  # invalid
+        if not x or not y or x == y:
             continue
         text = to_pair_text(x, y)
         out.append({
@@ -45,7 +56,6 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "theme": q.get("theme"),
             "createdAt": time.time(),
         })
-    # dedupe within batch
     seen = set(); uniq = []
     for q in out:
         h = pair_hash(q["x_norm"], q["y_norm"])
@@ -55,19 +65,16 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _order_and_store(session_id: str, qs: List[Dict[str, Any]], pref_vec: np.ndarray) -> List[str]:
     if not qs: return []
-    # Embed once
     texts = [q["text"] for q in qs]
     vecs = embed_texts(texts)
     for q, v in zip(qs, vecs):
         q["embedding"] = v.tolist()
-    # MMR ordering
     order = mmr_order(vecs, pref_vec, k=min(len(vecs), DECK_TARGET))
     ordered = [qs[i] for i in order]
     ids = db.upsert_questions(session_id, ordered)
     return ids
 
-def _liked_vectors(session_id: str) -> List[np.ndarray]:
-    # Pull last ~50 likes for centroid
+def _liked_vectors(session_id: str):
     cur = db.votes.find({"sessionId": session_id, "like": True}).sort("createdAt", -1).limit(50)
     qids = [v["questionId"] for v in cur]
     if not qids: return []
@@ -133,19 +140,16 @@ def create_session(body: CreateSessionReq, bg: BackgroundTasks):
     }
     sid = db.ins(db.sessions, sdoc)
 
-    # Seed generation
     players_json = json.dumps(players, ensure_ascii=False)
     raw = generate_seed(players_json, SEED_BATCH_SIZE)
     prepped = _prepare_questions(raw)
 
-    # Cold-start pref from sliders
     pref = sliders_to_pref(players)
     ids = _order_and_store(sid, prepped, pref)
 
     if ids:
         db.push_deck(sid, ids)
     else:
-        # fallback: immediately top up in background
         bg.add_task(_background_topup, sid)
 
     return SessionResp(sessionId=sid, createdAt=sdoc["createdAt"], pg13=sdoc["pg13"])
@@ -155,16 +159,11 @@ def next_question(sessionId: str, bg: BackgroundTasks):
     s = db.get_session(sessionId)
     if not s: raise HTTPException(404, "session not found")
 
-    # Pop next; if deck low, top-up asynchronously
-    rem = db.remaining_count(sessionId)
-    if rem <= 0:
-        # No items; try to top-up sync once
+    if db.remaining_count(sessionId) <= 0:
         _background_topup(sessionId)
-        rem = db.remaining_count(sessionId)
-        if rem <= 0:
-            raise HTTPException(503, "Deck empty; try again in a moment.")
+        if db.remaining_count(sessionId) <= 0:
+            raise HTTPException(503, "Deck empty; try again.")
 
-    # pop
     qid = db.pop_next(sessionId)
     if not qid:
         raise HTTPException(503, "No question available.")
@@ -173,7 +172,6 @@ def next_question(sessionId: str, bg: BackgroundTasks):
     if not q:
         raise HTTPException(500, "Question missing.")
 
-    # schedule background top-up if low
     rem_after = db.remaining_count(sessionId)
     if rem_after < int(os.environ.get("DECK_MIN", DECK_MIN)):
         bg.add_task(_background_topup, sessionId)
@@ -202,7 +200,6 @@ def batch_more(sessionId: str, body: MoreReq, bg: BackgroundTasks):
     bg.add_task(_background_topup, sessionId)
     return {"queued": True}
 
-# Local dev entry
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT","8000")), reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=int(os.environ.get("PORT","8000")), reload=True)
