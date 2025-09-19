@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ratherbe
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: ratherbe
+      - key: LLM_MODEL
+        value: gpt-4.1-mini
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: SEED_BATCH_SIZE
+        value: "40"
+      - key: TOPUP_BATCH_SIZE
+        value: "40"
+      - key: DECK_TARGET
+        value: "18"
+      - key: DECK_MIN
+        value: "8"
+      - key: ALLOW_ORIGINS
+        value: "*"
