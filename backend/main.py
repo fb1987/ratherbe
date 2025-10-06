@@ -11,13 +11,14 @@ from . import db
 from .llm import generate_seed, generate_follow, embed_texts, sliders_to_pref
 from .rank import centroid, mmr_order
 from .utils import normalize_item, to_pair_text, pair_hash
+from .images import start_workers, enqueue_for_session  # NEW
 
 SEED_BATCH_SIZE = int(os.environ.get("SEED_BATCH_SIZE", "40"))
 TOPUP_BATCH_SIZE = int(os.environ.get("TOPUP_BATCH_SIZE", "40"))
 DECK_TARGET = int(os.environ.get("DECK_TARGET", "18"))
 DECK_MIN = int(os.environ.get("DECK_MIN", "8"))
 
-app = FastAPI(title="RatherBe API", version="0.1.1")
+app = FastAPI(title="RatherBe API", version="0.2.0")
 
 origins = os.environ.get("ALLOW_ORIGINS", "*")
 app.add_middleware(
@@ -38,7 +39,10 @@ if os.path.isdir(FRONTEND_DIR):
     def index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
-# ---- Helpers (same as before) ----
+# Start async image workers once
+start_workers()
+
+# ---- Helpers ----
 
 def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
@@ -121,6 +125,9 @@ def _background_topup(session_id: str):
     ids = _order_and_store(session_id, prepped, pref)
     if ids:
         db.push_deck(session_id, ids)
+        # enqueue images for the freshly added questions
+        session_doc = db.get_session(session_id)
+        enqueue_for_session(session_doc, ids)
 
 # ---- Routes ----
 
@@ -149,6 +156,9 @@ def create_session(body: CreateSessionReq, bg: BackgroundTasks):
 
     if ids:
         db.push_deck(sid, ids)
+        # queue images for initial deck
+        session_doc = db.get_session(sid)
+        enqueue_for_session(session_doc, ids)
     else:
         bg.add_task(_background_topup, sid)
 
