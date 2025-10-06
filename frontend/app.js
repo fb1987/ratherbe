@@ -6,9 +6,9 @@ const qEl = $("#question");
 const remEl = $("#remaining");
 const tagsEl = $("#tags");
 const toastEl = $("#toast");
+const bgEl = $("#bg");
 
 const API = {
-  base: "",
   async createSession(payload) {
     const r = await fetch(`/session`, {
       method: "POST",
@@ -52,7 +52,7 @@ function hide(el) { el.classList.add("hidden"); }
 function setStatus(msg) { statusEl.textContent = msg; }
 function toast(msg) {
   toastEl.textContent = msg;
-  toastEl.className = "fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-xl shadow " ;
+  toastEl.className = "fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-xl shadow";
   show(toastEl);
   setTimeout(() => hide(toastEl), 1600);
 }
@@ -67,10 +67,20 @@ async function getNext() {
     qEl.textContent = data.question.text;
     remEl.textContent = `${data.remaining} in deck`;
     renderTags(data.question.tags || []);
+
+    // background (if available)
+    if (data.question.imageDataUrl) {
+      bgEl.style.backgroundImage = `url("${data.question.imageDataUrl}")`;
+      bgEl.style.filter = "saturate(0.9) brightness(0.95)";
+    } else {
+      bgEl.style.backgroundImage = "";
+      bgEl.style.filter = "none";
+    }
+
     setStatus(`Session ${state.sessionId.slice(-6)}`);
   } catch (e) {
     console.error(e);
-    toast("Fetching next failed. Retrying…");
+    toast("Fetching next failed.");
   } finally {
     state.busy = false;
   }
@@ -91,7 +101,6 @@ async function handleVote(like) {
   try {
     state.busy = true;
     await API.vote(state.questionId, like);
-    // Immediately fetch next
     await getNext();
   } catch (e) {
     console.error(e);
@@ -163,17 +172,12 @@ function maybeResume() {
 
 /* Bindings */
 $("#setup-form").addEventListener("submit", startSession);
-$("#btn-up").addEventListener("click", () => handleVote(true));
-$("#btn-down").addEventListener("click", () => handleVote(false));
-$("#more-btn").addEventListener("click", async () => {
-  if (!state.sessionId) return;
-  toast("Queued more");
-  await API.more(state.sessionId);
-});
+$("#btn-more").addEventListener("click", () => handleVote(true));
+$("#btn-less").addEventListener("click", () => handleVote(false));
 document.addEventListener("keydown", (e) => {
   if (state.busy) return;
-  if (e.key === "ArrowUp" || e.key === "k") $("#btn-up").click();
-  if (e.key === "ArrowDown" || e.key === "j") $("#btn-down").click();
+  if (e.key === "ArrowRight" || e.key === "k") $("#btn-more").click();
+  if (e.key === "ArrowLeft"  || e.key === "j") $("#btn-less").click();
 });
 
 /* Init */
