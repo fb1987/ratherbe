@@ -33,6 +33,8 @@ class QuestionDTO(BaseModel):
     y: str
     tags: List[str] = []
     theme: Optional[str] = None
+    imageDataUrl: Optional[str] = None  # NEW
+
 
 class NextResp(BaseModel):
     sessionId: str
