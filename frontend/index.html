@@ -12,22 +12,36 @@
     <meta name="color-scheme" content="light dark" />
     <style>
       html, body { height: 100%; }
-      .btn {
-        @apply inline-flex items-center justify-center rounded-2xl px-6 py-4 text-lg font-semibold shadow;
-      }
+      .btn { @apply inline-flex items-center justify-center rounded-2xl px-6 py-4 text-lg font-semibold shadow; }
       .btn-ghost { @apply bg-white/70 dark:bg-white/10 backdrop-blur border border-black/10 dark:border-white/10; }
-      .btn-up    { @apply bg-emerald-600 text-white hover:brightness-110; }
-      .btn-down  { @apply bg-rose-600 text-white hover:brightness-110; }
       .chip { @apply inline-block text-xs px-2 py-1 rounded-full bg-black/5 dark:bg-white/10; }
+
+      /* NEW: big square buttons */
+      .big-square { @apply rounded-2xl text-xl md:text-2xl font-bold p-8 w-full aspect-square flex items-center justify-center select-none; }
+      .btn-more  { @apply bg-emerald-600 text-white hover:brightness-110; }
+      .btn-less  { @apply bg-rose-600 text-white hover:brightness-110; }
+
+      /* background image holder */
+      .bg-frame {
+        position: fixed; inset: 0; z-index: -1;
+        background: radial-gradient(80% 80% at 50% 20%, rgba(16,185,129,.08), transparent),
+                    linear-gradient(180deg, rgba(15,23,42,.06), transparent);
+        background-size: cover; background-position: center; filter: saturate(0.9);
+        transition: background-image 0.35s ease, filter 0.35s ease;
+      }
     </style>
   </head>
   <body class="bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 antialiased">
+    <!-- background layer -->
+    <div id="bg" class="bg-frame"></div>
+
     <div id="app" class="min-h-full flex flex-col">
       <!-- Header -->
       <header class="w-full border-b border-black/5 dark:border-white/10">
         <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <img src="/static/favicon.svg" class="h-8 w-8" alt="logo" />
+            <!-- Use /static/logo.svg (put your logo file at frontend/logo.svg) -->
+            <img src="/static/logo.svg" class="h-8 w-auto" alt="logo" />
             <h1 class="text-xl font-bold tracking-tight">Rather Be</h1>
           </div>
           <div class="text-sm opacity-60" id="status">…</div>
@@ -41,7 +55,7 @@
           <section id="onboarding" class="max-w-2xl mx-auto hidden">
             <div class="rounded-3xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur p-6 shadow-lg">
               <h2 class="text-2xl font-bold mb-2">Quick Setup</h2>
-              <p class="text-sm opacity-70 mb-6">Two slidersets, PG-13 by default. Click <em>Start</em> to play.</p>
+              <p class="text-sm opacity-70 mb-6">Two slider sets, PG-13 by default. Click <em>Start</em> to play.</p>
 
               <form id="setup-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Player A -->
@@ -117,7 +131,7 @@
                     <input type="checkbox" name="pg13" checked class="accent-emerald-600">
                     PG-13 Mode (default)
                   </label>
-                  <button class="btn btn-up" id="start-btn" type="submit">Start →</button>
+                  <button class="btn btn-ghost" id="start-btn" type="submit">Start →</button>
                 </div>
               </form>
             </div>
@@ -128,13 +142,16 @@
             <div class="rounded-3xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur p-8 shadow-xl">
               <div class="mb-4 flex flex-wrap gap-2" id="tags"></div>
               <h2 id="question" class="text-3xl md:text-4xl font-bold leading-tight min-h-[4.5rem]"></h2>
+
               <div class="mt-8 grid grid-cols-2 gap-4">
-                <button id="btn-down" class="btn btn-down" aria-label="Thumb down">👎</button>
-                <button id="btn-up" class="btn btn-up" aria-label="Thumb up">👍</button>
+                <button id="btn-less" class="big-square btn-less" aria-label="Fewer like this">Fewer Like This</button>
+                <button id="btn-more" class="big-square btn-more" aria-label="More like this">More Like This</button>
               </div>
+
               <div class="mt-6 text-sm opacity-60 flex items-center justify-between">
                 <span id="remaining">…</span>
-                <button id="more-btn" class="btn btn-ghost px-3 py-2 text-sm">More like this</button>
+                <!-- optional manual queue button; keep if you like -->
+                <!-- <button id="more-btn" class="btn btn-ghost px-3 py-2 text-sm">Queue more</button> -->
               </div>
             </div>
             <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden"></div>
