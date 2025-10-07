@@ -1,19 +1,24 @@
-# backend/main.py — /next now blocks briefly for imageDataUrl
+# backend/main.py — /next waits briefly for on-disk image (/img/{qid}.png), deck=11
 
-import os, json, time
+import os, json, time, pathlib
 from typing import List, Dict, Any
+import numpy as np
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import numpy as np
 
 from .schemas import CreateSessionReq, SessionResp, NextResp, VoteReq, MoreReq, QuestionDTO
 from . import db
 from .llm import generate_seed, generate_follow, embed_texts, sliders_to_pref
 from .rank import centroid, mmr_order
 from .utils import normalize_item, to_pair_text, pair_hash
-from .images import start_workers, enqueue_for_session
+from .images import (
+    start_workers,
+    enqueue_for_session,
+    image_path_for,    # NEW: serve from /tmp
+    has_image,         # NEW: file existence check
+)
 
 # ----- Config -----
 DECK_TARGET = int(os.environ.get("DECK_TARGET", "11"))
@@ -21,11 +26,11 @@ DECK_MIN = int(os.environ.get("DECK_MIN", "3"))
 SEED_BATCH_SIZE = DECK_TARGET
 TOPUP_BATCH_SIZE = DECK_TARGET
 
-# NEW: image wait controls
-IMAGE_WAIT_MS = int(os.environ.get("IMAGE_WAIT_MS", "5500"))
-IMAGE_WAIT_STEP_MS = int(os.environ.get("IMAGE_WAIT_STEP_MS", "1050"))
+# Image wait controls (server-side block so first render has art)
+IMAGE_WAIT_MS = int(os.environ.get("IMAGE_WAIT_MS", "2500"))
+IMAGE_WAIT_STEP_MS = int(os.environ.get("IMAGE_WAIT_STEP_MS", "150"))
 
-app = FastAPI(title="RatherBe API", version="0.3.1")
+app = FastAPI(title="RatherBe API", version="0.4.0")
 
 origins = os.environ.get("ALLOW_ORIGINS", "*")
 app.add_middleware(
@@ -45,6 +50,14 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+# Serve generated images from /tmp (no DB storage)
+@app.get("/img/{qid}.png")
+def get_image(qid: str):
+    p = image_path_for(qid)
+    if not p.exists():
+        raise HTTPException(404, "image not found")
+    return FileResponse(str(p), media_type="image/png")
 
 # Start async image workers once
 start_workers()
@@ -149,22 +162,18 @@ def _background_topup(session_id: str):
     ids = _order_and_store(session_id, prepped, pref)
     if ids:
         db.push_deck(session_id, ids)
-        enqueue_for_session(db.get_session(session_id), ids)
+        enqueue_for_session(db.get_session(session_id), ids)  # queue images for new deck
 
-# NEW: wait for image helper
-def _await_image(qid: str) -> Dict[str, Any]:
-    """Poll the question document until imageDataUrl appears or timeout."""
+def _await_image_file(qid: str) -> bool:
+    """Poll for /tmp image to appear (bounded)."""
     deadline = time.time() + (IMAGE_WAIT_MS / 1000.0)
-    q = db.get_question(qid)
-    if q and q.get("imageDataUrl"):
-        return q
+    if has_image(qid):
+        return True
     while time.time() < deadline:
         time.sleep(IMAGE_WAIT_STEP_MS / 1000.0)
-        q = db.get_question(qid)
-        if q and q.get("imageDataUrl"):
-            return q
-    # final read; return whatever we have
-    return q or {}
+        if has_image(qid):
+            return True
+    return False
 
 # ---- Routes ----
 
@@ -186,7 +195,7 @@ def create_session(body: CreateSessionReq, bg: BackgroundTasks):
     ids = _order_and_store(sid, prepped, pref)
     if ids:
         db.push_deck(sid, ids)
-        enqueue_for_session(db.get_session(sid), ids)
+        enqueue_for_session(db.get_session(sid), ids)  # start generating images
     else:
         bg.add_task(_background_topup, sid)
 
@@ -195,7 +204,8 @@ def create_session(body: CreateSessionReq, bg: BackgroundTasks):
 @app.get("/next", response_model=NextResp)
 def next_question(sessionId: str, bg: BackgroundTasks):
     s = db.get_session(sessionId)
-    if not s: raise HTTPException(404, "session not found")
+    if not s:
+        raise HTTPException(404, "session not found")
 
     if db.remaining_count(sessionId) <= 0:
         _background_topup(sessionId)
@@ -203,10 +213,13 @@ def next_question(sessionId: str, bg: BackgroundTasks):
             raise HTTPException(503, "Deck empty; try again.")
 
     qid = db.pop_next(sessionId)
-    if not qid: raise HTTPException(503, "No question available.")
+    if not qid:
+        raise HTTPException(503, "No question available.")
 
-    # Wait for image for this question (bounded)
-    q = _await_image(qid)
+    # Wait (bounded) for the on-disk image to exist
+    _await_image_file(qid)
+
+    q = db.get_question(qid)
     if not q:
         raise HTTPException(500, "Question missing.")
 
@@ -214,13 +227,16 @@ def next_question(sessionId: str, bg: BackgroundTasks):
     if rem_after < DECK_MIN:
         bg.add_task(_background_topup, sessionId)
 
-    dto = QuestionDTO.model_validate({**q, "_id": str(q["_id"])})
+    # Point client at the served file if it exists
+    img_url = f"/img/{qid}.png" if has_image(qid) else None
+    dto = QuestionDTO.model_validate({**q, "_id": str(q["_id"]), "imageDataUrl": img_url})
     return NextResp(sessionId=sessionId, remaining=rem_after, question=dto)
 
 @app.post("/vote")
 def vote(body: VoteReq):
     q = db.get_question(body.questionId)
-    if not q: raise HTTPException(404, "question not found")
+    if not q:
+        raise HTTPException(404, "question not found")
     vdoc = {
         "sessionId": q["sessionId"],
         "questionId": body.questionId,
@@ -235,22 +251,19 @@ def vote(body: VoteReq):
 @app.post("/batch/more")
 def batch_more(sessionId: str, body: MoreReq, bg: BackgroundTasks):
     s = db.get_session(sessionId)
-    if not s: raise HTTPException(404, "session not found")
+    if not s:
+        raise HTTPException(404, "session not found")
     bg.add_task(_background_topup, sessionId)
     return {"queued": True}
 
-# Optional: direct probe (useful for debugging; safe to keep)
+# Optional: probe (now file-based)
 @app.get("/q/{qid}/image")
 def question_image(qid: str):
-    q = db.get_question(qid)
-    if not q:
-        raise HTTPException(404, "question not found")
+    exists = has_image(qid)
     return {
         "id": qid,
-        "hasImage": bool(q.get("imageDataUrl")),
-        "imageDataUrl": q.get("imageDataUrl"),
-        "imageAt": q.get("imageAt"),
-        "imageModel": q.get("imageModel"),
+        "hasImage": exists,
+        "imageDataUrl": f"/img/{qid}.png" if exists else None,
     }
 
 if __name__ == "__main__":
