@@ -18,8 +18,9 @@ class CreateSessionReq(BaseModel):
 
 class VoteReq(BaseModel):
     questionId: str
-    like: bool
-    player: Optional[str] = None  # "A" | "B" | None
+    chosen: Literal["x","y"]  # <-- NEW: user picks X or Y
+    player: Optional[str] = None
+    like: Optional[bool] = None  # kept optional/back-compat
 
 class MoreReq(BaseModel):
     reason: Literal["deck_low","manual","first_seed_failed"] = "manual"
