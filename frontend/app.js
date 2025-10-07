@@ -6,19 +6,26 @@ const bgEl = $("#bg");
 const toastEl = $("#toast");
 const labelX = $("#label-x");
 const labelY = $("#label-y");
+const startBtn = $("#start-btn");
+const startSpinner = $("#start-spinner");
+const startText = $("#start-text");
+
+// Always start fresh on reload (clear any stale session)
+try { localStorage.removeItem("rb_session"); } catch {}
 
 const API = {
   async createSession(payload) {
     const r = await fetch(`/session`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
+      cache: "no-store",
       body: JSON.stringify(payload)
     });
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },
   async next(sessionId) {
-    const r = await fetch(`/next?sessionId=${encodeURIComponent(sessionId)}`);
+    const r = await fetch(`/next?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },
@@ -26,6 +33,7 @@ const API = {
     const r = await fetch(`/vote`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
+      cache: "no-store",
       body: JSON.stringify({ questionId, chosen })
     });
     if (!r.ok) throw new Error(await r.text());
@@ -68,7 +76,7 @@ async function getNext(){
   }
 }
 
-async function choose(which){ // "x" | "y"
+async function choose(which){
   if (state.busy || !state.questionId) return;
   try{
     state.busy = true;
@@ -106,25 +114,22 @@ function buildPayloadFromForm(formEl){
 async function startSession(e){
   e.preventDefault();
   try{
+    startBtn.disabled = true;
+    startSpinner.style.display = "inline-block";
+    startText.textContent = "Seeding…";
+
     const res = await API.createSession(buildPayloadFromForm(e.currentTarget));
     state.sessionId = res.sessionId;
-    localStorage.setItem("rb_session", state.sessionId);
+
     hide(onboardingEl); show(gameEl);
     await getNext();
   }catch(err){
     console.error(err);
     toast("Failed to start session");
-  }
-}
-
-function maybeResume(){
-  const saved = localStorage.getItem("rb_session");
-  if (saved){
-    state.sessionId = saved;
-    hide(onboardingEl); show(gameEl);
-    getNext();
-  } else {
-    show(onboardingEl);
+  } finally {
+    startBtn.disabled = false;
+    startSpinner.style.display = "none";
+    startText.textContent = "Start →";
   }
 }
 
@@ -138,5 +143,5 @@ document.addEventListener("keydown",(e)=>{
   if (e.key==="ArrowRight"|| e.key==="d") $("#btn-y").click();
 });
 
-/* Init */
-maybeResume();
+/* Init: show onboarding (we cleared any saved session on load) */
+show(onboardingEl);
