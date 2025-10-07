@@ -51,7 +51,8 @@ MASTER_STYLE = (
   "A sophisticated single-line-style illustration with a witty, whimsical editorial feel, "
   "suited to luxury magazines and well-educated media outlets. Refined, minimal, consistent, "
   "and subtle—supporting the story as a tasteful webpage background. High-contrast linework, "
-  "ample negative space, soft paper texture, no text."
+  "ample negative space, soft paper texture, no text. Include pops of watercolor, "
+  "keep edges of the image smooth and organic"
 )
 
 def _player_line(p):
