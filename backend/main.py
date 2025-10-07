@@ -1,3 +1,5 @@
+# backend/main.py — /next now blocks briefly for imageDataUrl
+
 import os, json, time
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -13,13 +15,17 @@ from .rank import centroid, mmr_order
 from .utils import normalize_item, to_pair_text, pair_hash
 from .images import start_workers, enqueue_for_session
 
-# Fixed deck sizing
+# ----- Config -----
 DECK_TARGET = int(os.environ.get("DECK_TARGET", "11"))
 DECK_MIN = int(os.environ.get("DECK_MIN", "3"))
-SEED_BATCH_SIZE = DECK_TARGET    # generate exactly deck size
-TOPUP_BATCH_SIZE = DECK_TARGET   # ditto
+SEED_BATCH_SIZE = DECK_TARGET
+TOPUP_BATCH_SIZE = DECK_TARGET
 
-app = FastAPI(title="RatherBe API", version="0.3.0")
+# NEW: image wait controls
+IMAGE_WAIT_MS = int(os.environ.get("IMAGE_WAIT_MS", "5500"))
+IMAGE_WAIT_STEP_MS = int(os.environ.get("IMAGE_WAIT_STEP_MS", "1050"))
+
+app = FastAPI(title="RatherBe API", version="0.3.1")
 
 origins = os.environ.get("ALLOW_ORIGINS", "*")
 app.add_middleware(
@@ -30,14 +36,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+# ---- Static frontend ----
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # repo root
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+# Start async image workers once
 start_workers()
 
 # ---- Helpers ----
@@ -58,7 +67,7 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "theme": q.get("theme"),
             "createdAt": time.time(),
         })
-    # batch de-dupe by pair hash
+    # de-dup by pair hash
     seen = set(); uniq = []
     for q in out:
         h = pair_hash(q["x_norm"], q["y_norm"])
@@ -67,7 +76,7 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return uniq
 
 def _order_and_store(session_id: str, qs: List[Dict[str, Any]], pref_vec: np.ndarray) -> List[str]:
-    """Embed pair text + individual x/y; rank by pair; store all embeddings."""
+    """Embed pair text + x/y; rank by pair embedding; store all embeddings."""
     if not qs: return []
     pair_texts = [q["text"] for q in qs]
     xy_texts = [q["x"] for q in qs] + [q["y"] for q in qs]
@@ -75,19 +84,16 @@ def _order_and_store(session_id: str, qs: List[Dict[str, Any]], pref_vec: np.nda
     xy_vecs = embed_texts(xy_texts)
     x_vecs = xy_vecs[:len(qs)]
     y_vecs = xy_vecs[len(qs):]
-
     for q, pv, xv, yv in zip(qs, pair_vecs, x_vecs, y_vecs):
         q["embedding"] = pv.tolist()
         q["xEmb"] = xv.tolist()
         q["yEmb"] = yv.tolist()
-
     order = mmr_order([np.array(v) for v in pair_vecs], pref_vec, k=min(len(qs), DECK_TARGET))
     ordered = [qs[i] for i in order]
     ids = db.upsert_questions(session_id, ordered)
     return ids
 
 def _pref_from_choices(session_id: str) -> np.ndarray:
-    """Centroid of chosen option embeddings (xEmb/yEmb)."""
     cur = db.votes.find({"sessionId": session_id}).sort("createdAt", -1).limit(200)
     choice_vecs = []
     for v in cur:
@@ -101,9 +107,9 @@ def _pref_from_choices(session_id: str) -> np.ndarray:
     return np.zeros(1536, dtype=np.float32)
 
 def _session_pref(session: Dict[str, Any]) -> np.ndarray:
-    from_choices = _pref_from_choices(str(session["_id"]))
-    if np.linalg.norm(from_choices) > 0:
-        return from_choices
+    ch = _pref_from_choices(str(session["_id"]))
+    if np.linalg.norm(ch) > 0:
+        return ch
     return sliders_to_pref(session.get("players", []))
 
 def _top_tags(session_id: str, n: int = 6) -> List[str]:
@@ -128,8 +134,7 @@ def _liked_examples_json(session_id: str, n: int = 8) -> str:
 
 def _need_count(session_id: str) -> int:
     rem = db.remaining_count(session_id)
-    need = max(0, DECK_TARGET - rem)
-    return need
+    return max(0, DECK_TARGET - rem)
 
 def _background_topup(session_id: str):
     session = db.get_session(session_id)
@@ -145,6 +150,21 @@ def _background_topup(session_id: str):
     if ids:
         db.push_deck(session_id, ids)
         enqueue_for_session(db.get_session(session_id), ids)
+
+# NEW: wait for image helper
+def _await_image(qid: str) -> Dict[str, Any]:
+    """Poll the question document until imageDataUrl appears or timeout."""
+    deadline = time.time() + (IMAGE_WAIT_MS / 1000.0)
+    q = db.get_question(qid)
+    if q and q.get("imageDataUrl"):
+        return q
+    while time.time() < deadline:
+        time.sleep(IMAGE_WAIT_STEP_MS / 1000.0)
+        q = db.get_question(qid)
+        if q and q.get("imageDataUrl"):
+            return q
+    # final read; return whatever we have
+    return q or {}
 
 # ---- Routes ----
 
@@ -184,8 +204,11 @@ def next_question(sessionId: str, bg: BackgroundTasks):
 
     qid = db.pop_next(sessionId)
     if not qid: raise HTTPException(503, "No question available.")
-    q = db.get_question(qid)
-    if not q: raise HTTPException(500, "Question missing.")
+
+    # Wait for image for this question (bounded)
+    q = _await_image(qid)
+    if not q:
+        raise HTTPException(500, "Question missing.")
 
     rem_after = db.remaining_count(sessionId)
     if rem_after < DECK_MIN:
@@ -201,8 +224,8 @@ def vote(body: VoteReq):
     vdoc = {
         "sessionId": q["sessionId"],
         "questionId": body.questionId,
-        "chosen": body.chosen,          # <-- record choice
-        "like": body.like if body.like is not None else True,  # optional signal
+        "chosen": body.chosen,
+        "like": body.like if body.like is not None else True,
         "player": body.player,
         "createdAt": time.time()
     }
@@ -215,6 +238,20 @@ def batch_more(sessionId: str, body: MoreReq, bg: BackgroundTasks):
     if not s: raise HTTPException(404, "session not found")
     bg.add_task(_background_topup, sessionId)
     return {"queued": True}
+
+# Optional: direct probe (useful for debugging; safe to keep)
+@app.get("/q/{qid}/image")
+def question_image(qid: str):
+    q = db.get_question(qid)
+    if not q:
+        raise HTTPException(404, "question not found")
+    return {
+        "id": qid,
+        "hasImage": bool(q.get("imageDataUrl")),
+        "imageDataUrl": q.get("imageDataUrl"),
+        "imageAt": q.get("imageAt"),
+        "imageModel": q.get("imageModel"),
+    }
 
 if __name__ == "__main__":
     import uvicorn
