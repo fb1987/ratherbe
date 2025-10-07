@@ -1,0 +1,91 @@
+/* Background image */
+.bg-frame {
+  position: fixed; inset: 0; z-index: -1;
+  background-size: cover;             /* desktop/tablet */
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: saturate(0.9);
+  transition: background-image .35s ease, filter .35s ease;
+}
+/* Mobile: show full image (less cropping) */
+@media (max-width: 640px) {
+  .bg-frame { background-size: contain; background-color: #fafafa; }
+}
+
+/* White header bar */
+.header-bar {
+  background: #fff;
+  border-bottom: 1px solid rgba(0,0,0,.05);
+}
+
+/* Bottom card (force white) */
+.rb-card {
+  max-width: 48rem; /* ~768px */
+  width: 100%;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(0,0,0,.1);
+  background: #fff !important;
+  color: #000;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+}
+
+/* Centered text in card */
+.rb-question {
+  text-align: center;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.rb-choices {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  margin-top: .75rem;
+}
+
+/* Option pills */
+.rb-pill {
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.6);
+  padding: .5rem 1rem;
+  font-weight: 600;
+  background: transparent;
+  color: #000;
+  transition: box-shadow .15s ease, transform .05s ease, background .15s ease;
+}
+.rb-pill:hover {
+  background: rgba(0,0,0,.04);
+  box-shadow: 0 3px 10px rgba(0,0,0,.25);
+}
+.rb-pill:active { transform: translateY(1px); }
+
+/* Start button + spinner */
+.btn {
+  border-radius: 1rem;
+  padding: .75rem 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  background: #000;
+}
+.btn[disabled] { opacity: .7; cursor: not-allowed; }
+.spinner {
+  width: 1rem; height: 1rem; border-radius: 9999px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  animation: spin .8s linear infinite;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: .5rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Utilities */
+.stage-bottom {
+  position: fixed; inset-inline: 0; bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.center-row {
+  max-width: 80rem; margin-inline: auto; padding-inline: 1rem;
+}
