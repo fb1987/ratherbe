@@ -11,14 +11,15 @@ from . import db
 from .llm import generate_seed, generate_follow, embed_texts, sliders_to_pref
 from .rank import centroid, mmr_order
 from .utils import normalize_item, to_pair_text, pair_hash
-from .images import start_workers, enqueue_for_session  # NEW
+from .images import start_workers, enqueue_for_session
 
-SEED_BATCH_SIZE = int(os.environ.get("SEED_BATCH_SIZE", "40"))
-TOPUP_BATCH_SIZE = int(os.environ.get("TOPUP_BATCH_SIZE", "40"))
-DECK_TARGET = int(os.environ.get("DECK_TARGET", "18"))
-DECK_MIN = int(os.environ.get("DECK_MIN", "8"))
+# Fixed deck sizing
+DECK_TARGET = int(os.environ.get("DECK_TARGET", "11"))
+DECK_MIN = int(os.environ.get("DECK_MIN", "3"))
+SEED_BATCH_SIZE = DECK_TARGET    # generate exactly deck size
+TOPUP_BATCH_SIZE = DECK_TARGET   # ditto
 
-app = FastAPI(title="RatherBe API", version="0.2.0")
+app = FastAPI(title="RatherBe API", version="0.3.0")
 
 origins = os.environ.get("ALLOW_ORIGINS", "*")
 app.add_middleware(
@@ -29,17 +30,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- Static frontend (served from / and /static) ----
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))  # repo root
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
-# Start async image workers once
 start_workers()
 
 # ---- Helpers ----
@@ -60,6 +58,7 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "theme": q.get("theme"),
             "createdAt": time.time(),
         })
+    # batch de-dupe by pair hash
     seen = set(); uniq = []
     for q in out:
         h = pair_hash(q["x_norm"], q["y_norm"])
@@ -68,35 +67,47 @@ def _prepare_questions(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return uniq
 
 def _order_and_store(session_id: str, qs: List[Dict[str, Any]], pref_vec: np.ndarray) -> List[str]:
+    """Embed pair text + individual x/y; rank by pair; store all embeddings."""
     if not qs: return []
-    texts = [q["text"] for q in qs]
-    vecs = embed_texts(texts)
-    for q, v in zip(qs, vecs):
-        q["embedding"] = v.tolist()
-    order = mmr_order(vecs, pref_vec, k=min(len(vecs), DECK_TARGET))
+    pair_texts = [q["text"] for q in qs]
+    xy_texts = [q["x"] for q in qs] + [q["y"] for q in qs]
+    pair_vecs = embed_texts(pair_texts)
+    xy_vecs = embed_texts(xy_texts)
+    x_vecs = xy_vecs[:len(qs)]
+    y_vecs = xy_vecs[len(qs):]
+
+    for q, pv, xv, yv in zip(qs, pair_vecs, x_vecs, y_vecs):
+        q["embedding"] = pv.tolist()
+        q["xEmb"] = xv.tolist()
+        q["yEmb"] = yv.tolist()
+
+    order = mmr_order([np.array(v) for v in pair_vecs], pref_vec, k=min(len(qs), DECK_TARGET))
     ordered = [qs[i] for i in order]
     ids = db.upsert_questions(session_id, ordered)
     return ids
 
-def _liked_vectors(session_id: str):
-    cur = db.votes.find({"sessionId": session_id, "like": True}).sort("createdAt", -1).limit(50)
-    qids = [v["questionId"] for v in cur]
-    if not qids: return []
-    docs = db.questions.find({"_id": {"$in": [db.oid(i) for i in qids]}})
-    vecs = []
-    for d in docs:
-        if "embedding" in d:
-            vecs.append(np.array(d["embedding"], dtype=np.float32))
-    return vecs
+def _pref_from_choices(session_id: str) -> np.ndarray:
+    """Centroid of chosen option embeddings (xEmb/yEmb)."""
+    cur = db.votes.find({"sessionId": session_id}).sort("createdAt", -1).limit(200)
+    choice_vecs = []
+    for v in cur:
+        q = db.get_question(v["questionId"])
+        if not q: continue
+        key = "xEmb" if v.get("chosen") == "x" else "yEmb" if v.get("chosen") == "y" else None
+        if key and q.get(key):
+            choice_vecs.append(np.array(q[key], dtype=np.float32))
+    if choice_vecs:
+        return centroid(choice_vecs)
+    return np.zeros(1536, dtype=np.float32)
 
 def _session_pref(session: Dict[str, Any]) -> np.ndarray:
-    liked = _liked_vectors(str(session["_id"]))
-    if liked:
-        return centroid(liked)
+    from_choices = _pref_from_choices(str(session["_id"]))
+    if np.linalg.norm(from_choices) > 0:
+        return from_choices
     return sliders_to_pref(session.get("players", []))
 
 def _top_tags(session_id: str, n: int = 6) -> List[str]:
-    cur = db.votes.find({"sessionId": session_id, "like": True}).sort("createdAt", -1).limit(100)
+    cur = db.votes.find({"sessionId": session_id}).sort("createdAt", -1).limit(200)
     tag_count = {}
     for v in cur:
         q = db.get_question(v["questionId"])
@@ -106,28 +117,34 @@ def _top_tags(session_id: str, n: int = 6) -> List[str]:
     return [t for t, _ in sorted(tag_count.items(), key=lambda kv: kv[1], reverse=True)[:n]]
 
 def _liked_examples_json(session_id: str, n: int = 8) -> str:
-    cur = db.votes.find({"sessionId": session_id, "like": True}).sort("createdAt", -1).limit(n)
+    cur = db.votes.find({"sessionId": session_id}).sort("createdAt", -1).limit(30)
     items = []
     for v in cur:
         q = db.get_question(v["questionId"])
         if q:
             items.append({"x": q["x"], "y": q["y"], "tags": q.get("tags", []), "theme": q.get("theme")})
+            if len(items) >= n: break
     return json.dumps(items, ensure_ascii=False)
+
+def _need_count(session_id: str) -> int:
+    rem = db.remaining_count(session_id)
+    need = max(0, DECK_TARGET - rem)
+    return need
 
 def _background_topup(session_id: str):
     session = db.get_session(session_id)
     if not session: return
+    need = _need_count(session_id)
+    if need <= 0: return
     pref = _session_pref(session)
     liked_json = _liked_examples_json(session_id)
     tags = _top_tags(session_id)
-    raw = generate_follow(liked_json, tags, TOPUP_BATCH_SIZE)
+    raw = generate_follow(liked_json, tags, need)
     prepped = _prepare_questions(raw)
     ids = _order_and_store(session_id, prepped, pref)
     if ids:
         db.push_deck(session_id, ids)
-        # enqueue images for the freshly added questions
-        session_doc = db.get_session(session_id)
-        enqueue_for_session(session_doc, ids)
+        enqueue_for_session(db.get_session(session_id), ids)
 
 # ---- Routes ----
 
@@ -138,13 +155,7 @@ def healthz():
 @app.post("/session", response_model=SessionResp)
 def create_session(body: CreateSessionReq, bg: BackgroundTasks):
     players = body.players
-    sdoc = {
-        "players": players,
-        "pg13": bool(body.pg13),
-        "deck": [],
-        "createdAt": time.time(),
-        "updatedAt": time.time(),
-    }
+    sdoc = {"players": players, "pg13": bool(body.pg13), "deck": [], "createdAt": time.time(), "updatedAt": time.time()}
     sid = db.ins(db.sessions, sdoc)
 
     players_json = json.dumps(players, ensure_ascii=False)
@@ -153,12 +164,9 @@ def create_session(body: CreateSessionReq, bg: BackgroundTasks):
 
     pref = sliders_to_pref(players)
     ids = _order_and_store(sid, prepped, pref)
-
     if ids:
         db.push_deck(sid, ids)
-        # queue images for initial deck
-        session_doc = db.get_session(sid)
-        enqueue_for_session(session_doc, ids)
+        enqueue_for_session(db.get_session(sid), ids)
     else:
         bg.add_task(_background_topup, sid)
 
@@ -175,15 +183,12 @@ def next_question(sessionId: str, bg: BackgroundTasks):
             raise HTTPException(503, "Deck empty; try again.")
 
     qid = db.pop_next(sessionId)
-    if not qid:
-        raise HTTPException(503, "No question available.")
-
+    if not qid: raise HTTPException(503, "No question available.")
     q = db.get_question(qid)
-    if not q:
-        raise HTTPException(500, "Question missing.")
+    if not q: raise HTTPException(500, "Question missing.")
 
     rem_after = db.remaining_count(sessionId)
-    if rem_after < int(os.environ.get("DECK_MIN", DECK_MIN)):
+    if rem_after < DECK_MIN:
         bg.add_task(_background_topup, sessionId)
 
     dto = QuestionDTO.model_validate({**q, "_id": str(q["_id"])})
@@ -196,7 +201,8 @@ def vote(body: VoteReq):
     vdoc = {
         "sessionId": q["sessionId"],
         "questionId": body.questionId,
-        "like": bool(body.like),
+        "chosen": body.chosen,          # <-- record choice
+        "like": body.like if body.like is not None else True,  # optional signal
         "player": body.player,
         "createdAt": time.time()
     }
