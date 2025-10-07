@@ -2,10 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Rather Be</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
@@ -15,13 +12,9 @@
       .btn { @apply inline-flex items-center justify-center rounded-2xl px-6 py-4 text-lg font-semibold shadow; }
       .btn-ghost { @apply bg-white/70 dark:bg-white/10 backdrop-blur border border-black/10 dark:border-white/10; }
       .chip { @apply inline-block text-xs px-2 py-1 rounded-full bg-black/5 dark:bg-white/10; }
-
-      /* NEW: big square buttons */
-      .big-square { @apply rounded-2xl text-xl md:text-2xl font-bold p-8 w-full aspect-square flex items-center justify-center select-none; }
-      .btn-more  { @apply bg-emerald-600 text-white hover:brightness-110; }
-      .btn-less  { @apply bg-rose-600 text-white hover:brightness-110; }
-
-      /* background image holder */
+      .big-rect { @apply rounded-2xl text-xl md:text-2xl font-semibold p-6 w-full min-h-[4rem] flex items-center justify-center select-none; }
+      .btn-left  { @apply bg-emerald-600 text-white hover:brightness-110; }
+      .btn-right { @apply bg-rose-600 text-white hover:brightness-110; }
       .bg-frame {
         position: fixed; inset: 0; z-index: -1;
         background: radial-gradient(80% 80% at 50% 20%, rgba(16,185,129,.08), transparent),
@@ -32,23 +25,20 @@
     </style>
   </head>
   <body class="bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 antialiased">
-    <!-- background layer -->
     <div id="bg" class="bg-frame"></div>
 
     <div id="app" class="min-h-full flex flex-col">
-      <!-- Header -->
       <header class="w-full border-b border-black/5 dark:border-white/10">
         <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <!-- Use /static/logopng (put your logo file at frontend/logo.png) -->
-            <img src="/static/logo.png" class="h-8 w-auto" alt="logo" />
+            <!-- Put your logo at frontend/logo.svg -->
+            <img src="/static/logo.svg" class="h-8 w-auto" alt="logo" />
             <h1 class="text-xl font-bold tracking-tight">Rather Be</h1>
           </div>
           <div class="text-sm opacity-60" id="status">…</div>
         </div>
       </header>
 
-      <!-- Main -->
       <main class="flex-1 flex items-center">
         <div class="mx-auto max-w-3xl w-full px-4 py-8">
           <!-- Onboarding -->
@@ -64,32 +54,15 @@
                     <label class="font-semibold">Player A</label>
                     <input class="border rounded px-2 py-1 text-sm bg-transparent w-36" name="nameA" placeholder="A" />
                   </div>
-                  <div>
-                    <label class="text-sm">Creativity</label>
-                    <input name="A_creativity" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Absurdism</label>
-                    <input name="A_absurdism" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Romance</label>
-                    <input name="A_romance" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Pop Culture</label>
-                    <input name="A_pop" type="range" min="0" max="1" step="0.05" value="0.3" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Spice (PG-13 only)</label>
-                    <input name="A_spice" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Teenage Decade</label>
-                    <select name="A_decade" class="border rounded px-2 py-1 bg-transparent w-full">
-                      <option>1990s</option><option selected>2000s</option><option>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
-                    </select>
-                  </div>
+                  <label class="text-sm">Creativity</label><input name="A_creativity" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
+                  <label class="text-sm">Absurdism</label><input name="A_absurdism" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
+                  <label class="text-sm">Romance</label><input name="A_romance" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
+                  <label class="text-sm">Pop Culture</label><input name="A_pop" type="range" min="0" max="1" step="0.05" value="0.3" class="w-full">
+                  <label class="text-sm">Spice (PG-13 only)</label><input name="A_spice" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
+                  <label class="text-sm">Teenage Decade</label>
+                  <select name="A_decade" class="border rounded px-2 py-1 bg-transparent w-full">
+                    <option>1990s</option><option selected>2000s</option><option>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
+                  </select>
                 </div>
 
                 <!-- Player B -->
@@ -98,32 +71,15 @@
                     <label class="font-semibold">Player B</label>
                     <input class="border rounded px-2 py-1 text-sm bg-transparent w-36" name="nameB" placeholder="B" />
                   </div>
-                  <div>
-                    <label class="text-sm">Creativity</label>
-                    <input name="B_creativity" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Absurdism</label>
-                    <input name="B_absurdism" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Romance</label>
-                    <input name="B_romance" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Pop Culture</label>
-                    <input name="B_pop" type="range" min="0" max="1" step="0.05" value="0.4" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Spice (PG-13 only)</label>
-                    <input name="B_spice" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
-                  </div>
-                  <div>
-                    <label class="text-sm">Teenage Decade</label>
-                    <select name="B_decade" class="border rounded px-2 py-1 bg-transparent w-full">
-                      <option>1990s</option><option>2000s</option><option selected>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
-                    </select>
-                  </div>
+                  <label class="text-sm">Creativity</label><input name="B_creivity" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full" />
+                  <label class="text-sm">Absurdism</label><input name="B_absurdism" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
+                  <label class="text-sm">Romance</label><input name="B_romance" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
+                  <label class="text-sm">Pop Culture</label><input name="B_pop" type="range" min="0" max="1" step="0.05" value="0.4" class="w-full">
+                  <label class="text-sm">Spice (PG-13 only)</label><input name="B_spice" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
+                  <label class="text-sm">Teenage Decade</label>
+                  <select name="B_decade" class="border rounded px-2 py-1 bg-transparent w-full">
+                    <option>1990s</option><option>2000s</option><option selected>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
+                  </select>
                 </div>
 
                 <div class="md:col-span-2 flex items-center justify-between pt-2">
@@ -144,14 +100,12 @@
               <h2 id="question" class="text-3xl md:text-4xl font-bold leading-tight min-h-[4.5rem]"></h2>
 
               <div class="mt-8 grid grid-cols-2 gap-4">
-                <button id="btn-less" class="big-square btn-less" aria-label="Fewer like this">Fewer Like This</button>
-                <button id="btn-more" class="big-square btn-more" aria-label="More like this">More Like This</button>
+                <button id="btn-x" class="big-rect btn-left" aria-label="Choose left"><span id="label-x">Option A</span></button>
+                <button id="btn-y" class="big-rect btn-right" aria-label="Choose right"><span id="label-y">Option B</span></button>
               </div>
 
               <div class="mt-6 text-sm opacity-60 flex items-center justify-between">
                 <span id="remaining">…</span>
-                <!-- optional manual queue button; keep if you like -->
-                <!-- <button id="more-btn" class="btn btn-ghost px-3 py-2 text-sm">Queue more</button> -->
               </div>
             </div>
             <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden"></div>
