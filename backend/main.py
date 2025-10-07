@@ -6,7 +6,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .schemas import CreateSessionReq, SessionResp, NextResp, VoteReq, MoreReq, QuestionDTO
 from . import db
@@ -176,6 +176,11 @@ def _await_image_file(qid: str) -> bool:
     return False
 
 # ---- Routes ----
+
+@app.get("/", include_in_schema=False)
+def index():
+    headers = {"Cache-Control": "no-store"}
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"), headers=headers)
 
 @app.get("/healthz")
 def healthz():
