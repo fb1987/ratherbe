@@ -9,49 +9,42 @@
     <meta name="color-scheme" content="light dark" />
     <style>
       html, body { height: 100%; }
-
-      /* Card + buttons */
-      .card-dark { @apply rounded-3xl border border-white/10 bg-black/85 text-white backdrop-blur p-6 md:p-8 shadow-xl; }
-      .big-rect { @apply w-full min-h-[3.25rem] md:min-h-[3.5rem] flex items-center justify-center select-none text-base md:text-xl font-semibold; }
-      .btn-outline-light {
-        @apply border-2 border-white/80 text-white hover:bg-white/10;
-        border-radius: 16px; /* exact 16px radius as requested */
-      }
-
       /* Background image holder */
       .bg-frame {
         position: fixed; inset: 0; z-index: -1;
-        background: radial-gradient(80% 80% at 50% 20%, rgba(16,185,129,.08), transparent),
-                    linear-gradient(180deg, rgba(15,23,42,.06), transparent);
         background-size: cover; background-position: center;
         filter: saturate(0.9);
         transition: background-image 0.35s ease, filter 0.35s ease;
       }
+      /* Bottom card */
+      .rb-card {
+        @apply rounded-3xl border border-black/10 bg-white/90 backdrop-blur p-6 md:p-8 shadow-xl text-black;
+      }
+      /* Inline option buttons (pills) */
+      .rb-pill {
+        border-radius: 16px;
+        @apply inline-flex items-center justify-center border-2 border-black/70 px-4 py-2 font-medium hover:bg-black/5;
+      }
     </style>
   </head>
-  <body class="bg-neutral-50 text-black antialiased">
+  <body class="min-h-screen bg-neutral-50 text-black antialiased">
     <div id="bg" class="bg-frame"></div>
 
-    <div id="app" class="min-h-full flex flex-col">
-      <!-- Header -->
-      <header class="w-full border-b border-black/5">
-        <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <img src="/static/logo.svg" class="h-8 w-auto" alt="logo" />
-            <!-- Force black title text -->
-            <h1 class="text-xl font-bold tracking-tight text-black">Rather Be</h1>
-          </div>
-          <!-- Status removed from UI (kept for layout only, empty) -->
-          <div id="status" class="text-sm opacity-0 select-none">.</div>
+    <!-- Page layout: header + flexible stage -->
+    <div class="min-h-screen grid grid-rows-[auto,1fr]">
+      <!-- Header (title only) -->
+      <header class="border-b border-black/5">
+        <div class="max-w-5xl mx-auto px-4 py-4">
+          <h1 class="text-center text-xl font-bold tracking-tight">Rather Be</h1>
         </div>
       </header>
 
-      <!-- Main -->
-      <main class="flex-1 flex items-center">
-        <div class="mx-auto max-w-3xl w-full px-4 py-8">
-          <!-- Onboarding -->
-          <section id="onboarding" class="max-w-2xl mx-auto hidden">
-            <div class="rounded-3xl border border-black/10 bg-white/70 backdrop-blur p-6 shadow-lg">
+      <!-- Stage -->
+      <main class="relative">
+        <!-- Onboarding (kept, centered on stage) -->
+        <section id="onboarding" class="hidden">
+          <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="max-w-2xl w-full rounded-3xl border border-black/10 bg-white/80 backdrop-blur p-6 shadow-lg">
               <h2 class="text-2xl font-bold mb-2">Quick Setup</h2>
               <p class="text-sm opacity-70 mb-6">Two slider sets, PG-13 by default. Click <em>Start</em> to play.</p>
 
@@ -99,26 +92,29 @@
                 </div>
               </form>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <!-- Game Card -->
-          <section id="game" class="max-w-xl mx-auto hidden">
-            <div class="card-dark">
-              <h2 id="question" class="text-2xl md:text-3xl font-bold leading-snug min-h-[3.75rem]"></h2>
+        <!-- Game: card pinned to bottom center -->
+        <section id="game" class="hidden">
+          <div class="absolute inset-x-0 bottom-6 md:bottom-10 flex justify-center px-4">
+            <div class="rb-card max-w-3xl w-full">
+              <h2 id="question" class="text-2xl md:text-3xl font-bold leading-snug min-h-[3.5rem]"></h2>
 
-              <div class="mt-6 grid grid-cols-1 gap-3">
-                <button id="btn-x" class="big-rect btn-outline-light" aria-label="Choose left">
+              <!-- Inline choices -->
+              <div class="mt-4 flex items-center justify-start gap-4 flex-wrap">
+                <button id="btn-x" class="rb-pill" aria-label="Choose left">
                   <span id="label-x">Option A</span>
                 </button>
-                <button id="btn-y" class="big-rect btn-outline-light" aria-label="Choose right">
+                <button id="btn-y" class="rb-pill" aria-label="Choose right">
                   <span id="label-y">Option B</span>
                 </button>
               </div>
             </div>
+          </div>
 
-            <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden"></div>
-          </section>
-        </div>
+          <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden"></div>
+        </section>
       </main>
     </div>
 
