@@ -7,46 +7,30 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <meta name="color-scheme" content="light dark" />
-    <style>
-      html, body { height: 100%; }
-      /* Background image holder */
-      .bg-frame {
-        position: fixed; inset: 0; z-index: -1;
-        background-size: cover; background-position: center;
-        filter: saturate(0.9);
-        transition: background-image .35s ease, filter .35s ease;
-      }
-      /* Bottom card (white) */
-      .rb-card {
-        @apply max-w-3xl w-full rounded-3xl border border-black/10 bg-white p-6 md:p-8 shadow-xl text-black;
-      }
-      /* Inline option pills */
-      .rb-pill {
-        border-radius: 16px;
-        @apply inline-flex items-center justify-center border-2 border-black/70 px-4 py-2 font-medium hover:bg-black/5;
-      }
-    </style>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body class="min-h-screen bg-neutral-50 text-black antialiased">
     <div id="bg" class="bg-frame"></div>
 
-    <!-- Page grid: sticky white header + flexible stage -->
     <div class="min-h-screen grid grid-rows-[auto,1fr]">
-      <!-- Header (full-width white) -->
-      <header class="bg-white border-b border-black/5 sticky top-0 z-10">
-        <div class="max-w-5xl mx-auto px-4 py-4">
+      <!-- Header -->
+      <header class="header-bar sticky top-0 z-10">
+        <div class="center-row py-4">
           <h1 class="text-center text-xl font-bold tracking-tight">Rather Be</h1>
         </div>
       </header>
 
-      <!-- Stage -->
+      <!-- Main Stage -->
       <main class="relative">
-        <!-- Onboarding (centered) -->
+        <!-- Onboarding -->
         <section id="onboarding" class="hidden">
           <div class="absolute inset-0 flex items-center justify-center p-4">
             <div class="max-w-2xl w-full rounded-3xl border border-black/10 bg-white/90 backdrop-blur p-6 shadow-lg">
-              <h2 class="text-2xl font-bold mb-2">Quick Setup</h2>
-              <p class="text-sm opacity-70 mb-6">Two slider sets, PG-13 by default. Click <em>Start</em> to play.</p>
+              <h2 class="text-2xl font-bold mb-2 text-center">Quick Setup</h2>
+              <p class="text-sm opacity-70 mb-6 text-center">Two slider sets, PG-13 by default. Click <em>Start</em> to play.</p>
 
               <form id="setup-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Player A -->
@@ -88,7 +72,10 @@
                     <input type="checkbox" name="pg13" checked class="accent-emerald-600">
                     PG-13 Mode (default)
                   </label>
-                  <button class="rounded-2xl px-5 py-3 bg-black text-white hover:brightness-110" id="start-btn" type="submit">Start →</button>
+                  <button class="btn" id="start-btn" type="submit">
+                    <span id="start-spinner" class="spinner" style="display:none;"></span>
+                    <span id="start-text">Start →</span>
+                  </button>
                 </div>
               </form>
             </div>
@@ -97,12 +84,12 @@
 
         <!-- Game: card fixed to bottom center -->
         <section id="game" class="hidden">
-          <div class="fixed inset-x-0 bottom-0 pb-[env(safe-area-inset-bottom)]">
-            <div class="flex justify-center px-4 pb-4 md:pb-6">
+          <div class="stage-bottom">
+            <div class="center-row pb-4 md:pb-6">
               <div class="rb-card">
-                <h2 id="question" class="text-2xl md:text-3xl font-bold leading-snug min-h-[3.5rem]"></h2>
+                <h2 id="question" class="rb-question text-2xl md:text-3xl min-h-[3.5rem]"></h2>
 
-                <div class="mt-4 flex items-center justify-start gap-4 flex-wrap">
+                <div class="rb-choices">
                   <button id="btn-x" class="rb-pill" aria-label="Choose left">
                     <span id="label-x">Option A</span>
                   </button>
@@ -119,6 +106,14 @@
       </main>
     </div>
 
-    <script src="/static/app.js" type="module"></script>
+    <!-- Load app + fallback to show onboarding if JS fails -->
+    <link rel="modulepreload" href="/static/app.js" />
+    <script type="module" src="/static/app.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const ob = document.getElementById('onboarding');
+        if (ob) ob.classList.remove('hidden');
+      });
+    </script>
   </body>
 </html>
