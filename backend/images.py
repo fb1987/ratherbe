@@ -1,4 +1,4 @@
-# backend/images.py — Vertex AI (Imagen 3) background generator
+# backend/images.py — Vertex AI (Imagen 3) background generator with throttling
 
 import os, json, time, threading, queue, traceback, base64
 from typing import Dict, Any, List, Tuple
@@ -30,16 +30,32 @@ client = genai.Client(vertexai=True, project=project_id, location=LOCATION)
 
 from . import db
 
-# Model + params
-# (Imagen 3 “generate” model id per SDK docs)
+# ---- Model + params ----
+# Imagen 3 generate model id per google-genai SDK docs
 IMAGE_MODEL = os.environ.get("IMAGE_MODEL", "imagen-3.0-generate-002")
-IMAGE_SIZE = os.environ.get("IMAGE_SIZE", "768x768")     # 1024x1024 also fine
-IMAGE_CONCURRENCY = int(os.environ.get("IMAGE_CONCURRENCY", "2"))
+IMAGE_SIZE = os.environ.get("IMAGE_SIZE", "768x768")   # 1024x1024 also fine
+IMAGE_CONCURRENCY = int(os.environ.get("IMAGE_CONCURRENCY", "1"))  # keep 1 if you have 1 rps quota
+IMAGE_MIN_INTERVAL_MS = int(os.environ.get("IMAGE_MIN_INTERVAL_MS", "300"))  # 0.3s between calls
 
-# In-memory job queue
+# ---- In-memory job queue ----
 _jobs: "queue.Queue[Tuple[Dict[str, Any], str, Dict[str, Any]]]" = queue.Queue()
 _workers_started = False
 
+# ---- Global simple rate limiter (per-process) ----
+_last_call_ts = 0.0
+_rl_lock = threading.Lock()
+
+def _rate_limit():
+    """Sleep so that we keep ~1 call / IMAGE_MIN_INTERVAL_MS."""
+    global _last_call_ts
+    with _rl_lock:
+        now = time.monotonic()
+        wait = (_last_call_ts + IMAGE_MIN_INTERVAL_MS / 1000.0) - now
+        if wait > 0:
+            time.sleep(wait)
+        _last_call_ts = time.monotonic()
+
+# ---- Prompting ----
 MASTER_STYLE = (
   "A sophisticated single-line-style illustration with a witty, whimsical editorial feel, "
   "suited to luxury magazines and well-educated media outlets. Refined, minimal, consistent, "
@@ -64,18 +80,22 @@ def build_prompt(question_text: str, players: List[Dict[str, Any]]) -> str:
         "Avoid text, logos, faces of real people, and brand marks. Keep it calm and elegant."
     )
 
+# ---- Enqueue API (used by main.py) ----
 def enqueue_for_session(session: Dict[str, Any], question_ids: List[str], limit: int = 12):
-    if not session: return
+    if not session: 
+        return
     added = 0
     for qid in question_ids:
-        if added >= limit: break
+        if added >= limit:
+            break
         q = db.get_question(qid)
-        if not q or q.get("imageDataUrl"): 
+        if not q or q.get("imageDataUrl"):
             continue
         _jobs.put((session, qid, q))
         added += 1
     print(f"[images] enqueued {added} jobs for session {session.get('_id')}")
 
+# ---- Response helpers ----
 def _img_bytes_from_response(resp) -> bytes:
     """
     google-genai returns response.generated_images[...].image with helpers.
@@ -83,7 +103,7 @@ def _img_bytes_from_response(resp) -> bytes:
     """
     try:
         gimgs = getattr(resp, "generated_images", None) or []
-        if not gimgs: 
+        if not gimgs:
             return b""
         img_obj = getattr(gimgs[0], "image", None)
         if not img_obj:
@@ -108,6 +128,7 @@ def _img_bytes_from_response(resp) -> bytes:
     except Exception:
         return b""
 
+# ---- Worker ----
 def _worker_loop(idx: int):
     print(f"[images] worker {idx} started (model={IMAGE_MODEL}, size={IMAGE_SIZE}, loc={LOCATION})")
     while True:
@@ -122,15 +143,13 @@ def _worker_loop(idx: int):
 
             prompt = build_prompt(cur["text"], session.get("players", []))
 
-            # Generate 1 image via Imagen 3
+            _rate_limit()  # throttle each call
             resp = client.models.generate_images(
                 model=IMAGE_MODEL,
                 prompt=prompt,
                 config=types.GenerateImagesConfig(
                     number_of_images=1,
                     output_mime_type="image/png",
-                    # include_rai_reason=True,  # optional
-                    # You can set safety settings here if needed
                 ),
             )
 
@@ -155,9 +174,11 @@ def _worker_loop(idx: int):
         finally:
             _jobs.task_done()
 
+# ---- Startup ----
 def start_workers():
     global _workers_started
-    if _workers_started: return
+    if _workers_started:
+        return
     _workers_started = True
     n = max(1, IMAGE_CONCURRENCY)
     for i in range(n):
