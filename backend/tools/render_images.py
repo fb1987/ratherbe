@@ -24,6 +24,34 @@ BUCKET_NAME = os.getenv("BUCKET_NAME", "ratherbe-assets")
 storage_client = storage.Client()
 bucket = storage_client.bucket(BUCKET_NAME)
 
+def blob_exists(path: str) -> bool:
+    return bucket.blob(path).exists()
+
+def render_one(item):
+    h = item["pairHash"]
+    path = f"images/{h}/full.webp"
+
+    # SKIP if already uploaded
+    if blob_exists(path):
+        blob = bucket.blob(path)
+        blob.make_public()
+        return blob.public_url
+
+    text = item["text"]
+    prompt = build_prompt(text)
+    resp = client.models.generate_images(
+        model=IMAGE_MODEL,
+        prompt=prompt,
+        config=types.GenerateImagesConfig(
+            number_of_images=1,
+            output_mime_type="image/png",
+        ),
+    )
+    ...
+    url = upload_bytes(path, webp, "image/webp")
+    return url
+
+
 # ---- Params ----
 SRC = pathlib.Path("data/selected.jsonl")
 LOG = pathlib.Path("data/render_log.jsonl"); LOG.touch(exist_ok=True)
