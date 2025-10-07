@@ -116,13 +116,18 @@ async function startSession(e){
   try{
     startBtn.disabled = true;
     startSpinner.style.display = "inline-block";
-    startText.textContent = "Getting ready…";
+    startText.textContent = "Loading…";
 
     const res = await API.createSession(buildPayloadFromForm(e.currentTarget));
     state.sessionId = res.sessionId;
 
-    hide(onboardingEl); show(gameEl);
+    // Keep onboarding visible while we fetch the first question
+    startText.textContent = "Preparing first card…";
+
+    // Only show the game after getNext() resolves (prevents the blank/placeholder flash)
     await getNext();
+    hide(onboardingEl);
+    show(gameEl);
   }catch(err){
     console.error(err);
     toast("Failed to start session");
