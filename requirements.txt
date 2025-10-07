@@ -7,3 +7,5 @@ pymongo==4.10.1
 openai==1.51.2
 numpy==2.1.1
 httpx==0.27.2
+google-genai>=0.3.0
+google-auth>=2.35.0
