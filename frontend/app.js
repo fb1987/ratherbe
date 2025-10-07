@@ -116,7 +116,7 @@ async function startSession(e){
   try{
     startBtn.disabled = true;
     startSpinner.style.display = "inline-block";
-    startText.textContent = "Seeding…";
+    startText.textContent = "Getting ready…";
 
     const res = await API.createSession(buildPayloadFromForm(e.currentTarget));
     state.sessionId = res.sessionId;
