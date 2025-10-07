@@ -17,11 +17,17 @@
 
     <div class="min-h-screen grid grid-rows-[auto,1fr]">
       <!-- Header -->
-      <header class="header-bar sticky top-0 z-10">
-        <div class="center-row py-4">
-          <h1 class="text-center text-xl font-bold tracking-tight">Rather Be</h1>
+    <header class="header-bar sticky top-0 z-10">
+      <div class="center-row py-2 md:py-3">
+        <div class="flex justify-center">
+          <img
+            src="/static/logo.png"
+            alt="Rather Be"
+            class="h-[60px] md:h-[80px] w-auto select-none pointer-events-none"
+          />
         </div>
-      </header>
+      </div>
+    </header>
 
       <!-- Main Stage -->
       <main class="relative">
@@ -30,7 +36,7 @@
           <div class="absolute inset-0 flex items-center justify-center p-4">
             <div class="max-w-2xl w-full rounded-3xl border border-black/10 bg-white/90 backdrop-blur p-6 shadow-lg">
               <h2 class="text-2xl font-bold mb-2 text-center">Quick Setup</h2>
-              <p class="text-sm opacity-70 mb-6 text-center">Two slider sets, PG-13 by default. Click <em>Start</em> to play.</p>
+              <p class="text-sm opacity-70 mb-6 text-center">Click <em>Start</em> to play.</p>
 
               <form id="setup-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Player A -->
@@ -43,7 +49,6 @@
                   <label class="text-sm">Absurdism</label><input name="A_absurdism" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
                   <label class="text-sm">Romance</label><input name="A_romance" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
                   <label class="text-sm">Pop Culture</label><input name="A_pop" type="range" min="0" max="1" step="0.05" value="0.3" class="w-full">
-                  <label class="text-sm">Spice (PG-13 only)</label><input name="A_spice" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
                   <label class="text-sm">Teenage Decade</label>
                   <select name="A_decade" class="border rounded px-2 py-1 bg-transparent w-full">
                     <option>1990s</option><option selected>2000s</option><option>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
@@ -60,7 +65,6 @@
                   <label class="text-sm">Absurdism</label><input name="B_absurdism" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
                   <label class="text-sm">Romance</label><input name="B_romance" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
                   <label class="text-sm">Pop Culture</label><input name="B_pop" type="range" min="0" max="1" step="0.05" value="0.4" class="w-full">
-                  <label class="text-sm">Spice (PG-13 only)</label><input name="B_spice" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
                   <label class="text-sm">Teenage Decade</label>
                   <select name="B_decade" class="border rounded px-2 py-1 bg-transparent w-full">
                     <option>1990s</option><option>2000s</option><option selected>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
@@ -68,13 +72,9 @@
                 </div>
 
                 <div class="md:col-span-2 flex items-center justify-between pt-2">
-                  <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="pg13" checked class="accent-emerald-600">
-                    PG-13 Mode (default)
-                  </label>
                   <button class="btn" id="start-btn" type="submit">
                     <span id="start-spinner" class="spinner" style="display:none;"></span>
-                    <span id="start-text">Start →</span>
+                    <span id="start-text">Play →</span>
                   </button>
                 </div>
               </form>
