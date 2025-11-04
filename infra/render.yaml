@@ -29,3 +29,13 @@ services:
         value: "8"
       - key: ALLOW_ORIGINS
         value: "*"
+      - key: GCP_SA_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
+      - key: GOOGLE_CLOUD_LOCATION
+        sync: false
+      - key: GCS_IMAGE_BUCKET
+        sync: false
+      - key: GCS_IMAGE_PREFIX
+        sync: false
