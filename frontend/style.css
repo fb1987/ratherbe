@@ -82,9 +82,15 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Utilities */
-.stage-bottom {
-  position: fixed; inset-inline: 0; bottom: 0;
-  padding-bottom: env(safe-area-inset-bottom);
+.stage-center {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 6rem 1rem 3rem;
+  padding-top: calc(5rem + env(safe-area-inset-top));
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom));
 }
 .center-row {
   max-width: 80rem; margin-inline: auto; padding-inline: 1rem;

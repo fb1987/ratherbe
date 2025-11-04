@@ -34,47 +34,54 @@
         <!-- Onboarding -->
         <section id="onboarding" class="hidden">
           <div class="absolute inset-0 flex items-center justify-center p-4">
-            <div class="max-w-2xl w-full rounded-3xl border border-black/10 bg-white/90 backdrop-blur p-6 shadow-lg">
+            <div class="max-w-xl w-full rounded-3xl border border-black/10 bg-white/90 backdrop-blur p-6 shadow-lg">
               <h2 class="text-2xl font-bold mb-2 text-center">Quick Setup</h2>
-              <p class="text-sm opacity-70 mb-6 text-center">Click <em>Start</em> to play.</p>
+              <p class="text-sm opacity-70 mb-6 text-center">Set the vibe that feels right, then press <em>Start</em>.</p>
 
-              <form id="setup-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Player A -->
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <label class="font-semibold">Player A</label>
-                    <input class="border rounded px-2 py-1 text-sm bg-transparent w-36" name="nameA" placeholder="A" />
+              <form id="setup-form" class="space-y-6">
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="slider-creativity">Creativity</label>
+                    <input id="slider-creativity" name="A_creativity" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
+                    <p class="text-xs opacity-70">Structured → Imaginative</p>
                   </div>
-                  <label class="text-sm">Creativity</label><input name="A_creativity" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
-                  <label class="text-sm">Absurdism</label><input name="A_absurdism" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
-                  <label class="text-sm">Romance</label><input name="A_romance" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
-                  <label class="text-sm">Pop Culture</label><input name="A_pop" type="range" min="0" max="1" step="0.05" value="0.3" class="w-full">
-                  <label class="text-sm">Teenage Decade</label>
-                  <select name="A_decade" class="border rounded px-2 py-1 bg-transparent w-full">
-                    <option>1990s</option><option selected>2000s</option><option>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
-                  </select>
+
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="slider-absurdism">Absurdism</label>
+                    <input id="slider-absurdism" name="A_absurdism" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full">
+                    <p class="text-xs opacity-70">Grounded → Delightfully odd</p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="slider-romance">Romance</label>
+                    <input id="slider-romance" name="A_romance" type="range" min="0" max="1" step="0.05" value="0.2" class="w-full">
+                    <p class="text-xs opacity-70">Platonic → Soft &amp; swoony</p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="slider-pop">Pop Culture</label>
+                    <input id="slider-pop" name="A_pop" type="range" min="0" max="1" step="0.05" value="0.3" class="w-full">
+                    <p class="text-xs opacity-70">Timeless → Reference-packed</p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="slider-spice">Spice</label>
+                    <input id="slider-spice" name="A_spice" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
+                    <p class="text-xs opacity-70">Mild → Saucy (still PG-13)</p>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="font-semibold text-sm" for="select-decade">Teenage Decade</label>
+                    <select id="select-decade" name="A_decade" class="border rounded px-2 py-1 bg-transparent w-full">
+                      <option>1990s</option><option selected>2000s</option><option>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
+                    </select>
+                  </div>
                 </div>
 
-                <!-- Player B -->
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <label class="font-semibold">Player B</label>
-                    <input class="border rounded px-2 py-1 text-sm bg-transparent w-36" name="nameB" placeholder="B" />
-                  </div>
-                  <label class="text-sm">Creativity</label><input name="B_creivity" type="range" min="0" max="1" step="0.05" value="0.5" class="w-full" />
-                  <label class="text-sm">Absurdism</label><input name="B_absurdism" type="range" min="0" max="1" step="0.05" value="0.7" class="w-full">
-                  <label class="text-sm">Romance</label><input name="B_romance" type="range" min="0" max="1" step="0.05" value="0.1" class="w-full">
-                  <label class="text-sm">Pop Culture</label><input name="B_pop" type="range" min="0" max="1" step="0.05" value="0.4" class="w-full">
-                  <label class="text-sm">Teenage Decade</label>
-                  <select name="B_decade" class="border rounded px-2 py-1 bg-transparent w-full">
-                    <option>1990s</option><option>2000s</option><option selected>2010s</option><option>1980s</option><option>1970s</option><option>2020s</option>
-                  </select>
-                </div>
-
-                <div class="md:col-span-2 flex items-center justify-between pt-2">
+                <div class="flex items-center justify-end pt-2">
                   <button class="btn" id="start-btn" type="submit">
                     <span id="start-spinner" class="spinner" style="display:none;"></span>
-                    <span id="start-text">Play →</span>
+                    <span id="start-text">Start →</span>
                   </button>
                 </div>
               </form>
@@ -84,8 +91,8 @@
 
         <!-- Game: card fixed to bottom center -->
         <section id="game" class="hidden">
-          <div class="stage-bottom">
-            <div class="center-row pb-4 md:pb-6">
+          <div class="stage-center">
+            <div class="center-row">
               <div class="rb-card">
                 <h2 id="question" class="rb-question text-2xl md:text-3xl min-h-[3.5rem]"></h2>
 
