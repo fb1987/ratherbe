@@ -90,25 +90,25 @@ async function choose(which){
   }
 }
 
+function numberOrDefault(val, fallback){
+  const num = parseFloat(val);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 function buildPayloadFromForm(formEl){
   const f = new FormData(formEl);
-  const A = { name: (f.get("nameA")||"A").toString().trim()||"A", sliders:{
-    creativity: parseFloat(f.get("A_creativity")),
-    absurdism: parseFloat(f.get("A_absurdism")),
-    romance: parseFloat(f.get("A_romance")),
-    pop_culture: parseFloat(f.get("A_pop")),
-    spice: parseFloat(f.get("A_spice")),
-    decade: f.get("A_decade"),
-  }};
-  const B = { name: (f.get("nameB")||"B").toString().trim()||"B", sliders:{
-    creativity: parseFloat(f.get("B_creivity"))||0.5,
-    absurdism: parseFloat(f.get("B_absurdism")),
-    romance: parseFloat(f.get("B_romance")),
-    pop_culture: parseFloat(f.get("B_pop")),
-    spice: parseFloat(f.get("B_spice")),
-    decade: f.get("B_decade"),
-  }};
-  return { players:[A,B], pg13: !!f.get("pg13") };
+  const sliders = {
+    creativity: numberOrDefault(f.get("A_creativity"), 0.7),
+    absurdism: numberOrDefault(f.get("A_absurdism"), 0.5),
+    romance: numberOrDefault(f.get("A_romance"), 0.2),
+    pop_culture: numberOrDefault(f.get("A_pop"), 0.3),
+    spice: numberOrDefault(f.get("A_spice"), 0.1),
+    decade: (f.get("A_decade") || "2000s").toString(),
+  };
+  const player = { name: "Player", sliders };
+  const pg13Field = f.get("pg13");
+  const pg13 = pg13Field === null ? true : !!pg13Field;
+  return { players:[player], pg13 };
 }
 
 async function startSession(e){
