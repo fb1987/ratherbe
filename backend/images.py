@@ -1,7 +1,8 @@
 # backend/images.py — Vertex Imagen 3 to /tmp files (no DB storage)
 
 import os, json, time, threading, queue, traceback, pathlib
-from typing import Dict, Any, List, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, List, Optional, Tuple
 
 # ---- Auth (GCP service account JSON in GCP_SA_KEY) ----
 sa_json = os.getenv("GCP_SA_KEY")
@@ -23,8 +24,10 @@ with open("/tmp/sa.json", "w") as f:
 # ---- Client ----
 from google import genai
 from google.genai import types
+from google.cloud import storage
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 client = genai.Client(vertexai=True, project=project_id, location=LOCATION)
+storage_client = storage.Client(project=project_id)
 
 from . import db
 
@@ -33,6 +36,19 @@ IMAGE_CONCURRENCY = int(os.environ.get("IMAGE_CONCURRENCY", "1"))
 IMAGE_MIN_INTERVAL_MS = int(os.environ.get("IMAGE_MIN_INTERVAL_MS", "300"))
 IMAGE_DIR = pathlib.Path(os.environ.get("IMAGE_DIR", "/tmp/rb_images"))
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+GCS_IMAGE_BUCKET = os.environ.get("GCS_IMAGE_BUCKET")
+GCS_IMAGE_PREFIX = os.environ.get("GCS_IMAGE_PREFIX", "")
+_gcs_upload_flag = os.environ.get("GCS_UPLOAD_ENABLED")
+GCS_UPLOAD_ENABLED = bool(
+    GCS_IMAGE_BUCKET
+    and (_gcs_upload_flag is None or _gcs_upload_flag.lower() not in {"0", "false", "no"})
+)
+GCS_UPLOAD_WORKERS = int(os.environ.get("GCS_UPLOAD_WORKERS", "2"))
+
+_upload_executor: Optional[ThreadPoolExecutor] = (
+    ThreadPoolExecutor(max_workers=max(1, GCS_UPLOAD_WORKERS)) if GCS_UPLOAD_ENABLED else None
+)
 
 _jobs: "queue.Queue[Tuple[Dict[str, Any], str, Dict[str, Any]]]" = queue.Queue()
 _workers_started = False
@@ -111,6 +127,73 @@ def _img_bytes_from_response(resp) -> bytes:
     except Exception:
         return b""
 
+
+def _metadata_value(value: Any, max_len: int = 250) -> Optional[str]:
+    if value is None:
+        return None
+    try:
+        text = str(value)
+    except Exception:
+        return None
+    if not text:
+        return None
+    if len(text) > max_len:
+        return text[:max_len]
+    return text
+
+
+def upload_to_gcs(path: pathlib.Path, qid: str, qdoc: Dict[str, Any]) -> Optional[str]:
+    if not GCS_UPLOAD_ENABLED:
+        return None
+    if not path.exists():
+        return None
+
+    object_name = f"{GCS_IMAGE_PREFIX}{qid}.png"
+    bucket = storage_client.bucket(GCS_IMAGE_BUCKET)
+    blob = bucket.blob(object_name)
+
+    metadata = {}
+    for key, raw in (
+        ("option_x", qdoc.get("x")),
+        ("option_y", qdoc.get("y")),
+        ("question_text", qdoc.get("text")),
+        ("session_id", qdoc.get("sessionId")),
+    ):
+        value = _metadata_value(raw)
+        if value:
+            metadata[key] = value
+    if metadata:
+        blob.metadata = metadata
+
+    blob.upload_from_filename(str(path), content_type="image/png")
+    if metadata:
+        blob.patch()
+
+    gs_path = f"gs://{GCS_IMAGE_BUCKET}/{object_name}"
+    print(f"[images] uploaded {qid} to {gs_path}")
+    return gs_path
+
+
+def _safe_upload(path: pathlib.Path, qid: str, qdoc: Dict[str, Any]):
+    try:
+        upload_to_gcs(path, qid, qdoc)
+    except Exception as exc:
+        print(f"[images] ERROR uploading {qid} to GCS: {exc!r}")
+        traceback.print_exc()
+
+
+def _schedule_gcs_upload(path: pathlib.Path, qid: str, qdoc: Dict[str, Any]):
+    if not GCS_UPLOAD_ENABLED:
+        return
+    try:
+        if _upload_executor:
+            _upload_executor.submit(_safe_upload, path, qid, qdoc)
+        else:
+            threading.Thread(target=_safe_upload, args=(path, qid, qdoc), daemon=True).start()
+    except Exception as exc:
+        print(f"[images] ERROR scheduling GCS upload for {qid}: {exc!r}")
+        traceback.print_exc()
+
 def _worker_loop(idx: int):
     print(f"[images] worker {idx} started (model={IMAGE_MODEL}, dir={IMAGE_DIR}, loc={LOCATION})")
     while True:
@@ -141,6 +224,8 @@ def _worker_loop(idx: int):
             with open(out_path, "wb") as f:
                 f.write(img_bytes)
             print(f"[images] wrote {out_path}")
+
+            _schedule_gcs_upload(out_path, qid, q)
 
         except Exception as e:
             print("[images] ERROR generating image for", qid, ":", repr(e))
