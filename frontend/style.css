@@ -7,6 +7,23 @@
   filter: saturate(0.9);
   transition: background-image .35s ease, filter .35s ease;
 }
+
+/* Reduce the "floor" glare by layering in a darkening gradient */
+.bg-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.15) 45%,
+    rgba(0, 0, 0, 0.45) 65%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
+  opacity: .95; /* keep only ~5% of the previous reflective energy */
+  mix-blend-mode: multiply;
+}
 /* Mobile: show full image (less cropping) */
 @media (max-width: 640px) {
   .bg-frame { background-size: contain; background-color: #fafafa; }

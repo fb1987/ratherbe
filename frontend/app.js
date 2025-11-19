@@ -63,10 +63,11 @@ async function getNext(){
 
     if (data.question.imageDataUrl) {
       bgEl.style.backgroundImage = `url("${data.question.imageDataUrl}")`;
-      bgEl.style.filter = "saturate(0.9) brightness(0.95)";
+      // pull back the HDRI/light interaction so the virtual floor isn't blinding
+      bgEl.style.filter = "saturate(0.75) brightness(0.55) contrast(0.92)";
     } else {
       bgEl.style.backgroundImage = "";
-      bgEl.style.filter = "none";
+      bgEl.style.filter = "";
     }
   } catch (e) {
     console.error(e);
